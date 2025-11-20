@@ -1,0 +1,6 @@
+{
+    "section_delimiter": "========",
+    "text_footnote_pattern": "\\[\\[(\\d+)\\]\\]",
+    "footnote_footnote_pattern": "\\[\\[(\\d+)\\]\\]",
+    "output_footnote_format": "注[{content}]"
+}
