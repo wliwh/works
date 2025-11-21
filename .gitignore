@@ -4,3 +4,7 @@ epub文档/
 temp/
 *.bak
 .DS_Store
+__pycache__/
+*.pyc
+.gitignore
+*_calls.log

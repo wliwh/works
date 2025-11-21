@@ -265,9 +265,9 @@ def compare_with_names(pth, cls_pth = None):
 if __name__ == '__main__':
     bdir = r'e:\图书馆'
     allclasspth = r'D:\works\目录编写\toc-list.txt'
-    tmp = r'D:\Read\甲骨文丛书'
-    extra_toc_from_note('toc-mod.md',note=False)
-    # write_toc_file(tmp,())
+    tmp = r'/home/hh01/Downloads/winfiles/ali/先秦史古籍/难解'
+    # extra_toc_from_note('toc-mod.md',note=False)
+    write_toc_file(tmp,())
     # gg = compare_with_names(tmp,allclasspth)
     # move_to_dir(bdir, gg)
     # compare_with_md5(bdir, r"F:")
