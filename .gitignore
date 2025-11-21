@@ -1,0 +1,6 @@
+novel-name/
+epub文档/
+.log
+temp/
+*.bak
+.DS_Store
