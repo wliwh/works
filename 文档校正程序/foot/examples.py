@@ -108,7 +108,13 @@ def example4_complex_footnotes():
         f.write(complex_content)
     
     # 处理文档
-    processor = FootnoteProcessor()
+    config = FootnoteConfig(
+        section_delimiter="========",
+        text_footnote_pattern=r'\[\[(\d+)\]\]',  # 使用中文方括号
+        footnote_footnote_pattern=r'\[\[(\d+)\]\]',
+        output_footnote_format="【注：{content}】"  # 自定义输出格式
+    )
+    processor = FootnoteProcessor(config)
     result = processor.process_document('test_complex.txt', 'output_complex.txt')
     print("处理完成，输出文件：output_complex.txt")
     # print("\n处理结果：")

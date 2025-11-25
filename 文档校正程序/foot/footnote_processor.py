@@ -5,6 +5,7 @@
 """
 
 import re
+import unicodedata
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import json
@@ -13,9 +14,9 @@ import json
 @dataclass
 class FootnoteConfig:
     """脚注配置类"""
-    section_delimiter: str = "======"  # 部分开始标志
-    text_footnote_pattern: str = r'【(\d+)】' # r'【(\d+)】'  # 正文中脚注符号的正则表达式
-    footnote_footnote_pattern: str = r'【(\d+)】' # r'【(\d+)】'  # 脚注中符号的正则表达式
+    section_delimiter: str = "========"  # 部分开始标志
+    text_footnote_pattern: str = r'([\u2460-\u2473])' # r'【(\d+)】'  # 正文中脚注符号的正则表达式
+    footnote_footnote_pattern: str = r'([\u2460-\u2473])' # r'【(\d+)】'  # 脚注中符号的正则表达式
     output_footnote_format: str = "【{content}】"  # 输出时脚注内容的格式
     
 
@@ -122,12 +123,20 @@ class FootnoteProcessor:
             return content
         
         # 提取正文中的脚注符号
-        text_footnotes = self._extract_text_footnotes(main_text)
+        try:
+            text_footnotes = self._extract_text_footnotes(main_text)
+        except ValueError as exc:
+            self.errors.append(f"{section_id}：正文脚注符号解析失败 - {exc}")
+            return content
         
         # 提取脚注内容
         footnote_mapping = {}
         if footnotes_text:
-            footnote_mapping = self._extract_footnote_content(footnotes_text)
+            try:
+                footnote_mapping = self._extract_footnote_content(footnotes_text)
+            except ValueError as exc:
+                self.errors.append(f"{section_id}：脚注内容解析失败 - {exc}")
+                return content
         
         # 验证脚注
         is_valid = self._validate_footnotes(section_id, text_footnotes, footnote_mapping)
@@ -212,8 +221,14 @@ class FootnoteProcessor:
             脚注编号列表
         """
         pattern = re.compile(self.config.text_footnote_pattern)
-        matches = pattern.findall(text)
-        return [int(m) for m in matches]
+        numbers = []
+        for match in pattern.finditer(text):
+            raw = match.group(1)
+            try:
+                numbers.append(self._normalize_footnote_number(raw))
+            except ValueError as exc:
+                raise ValueError(f"无法解析正文脚注编号 '{raw}': {exc}")
+        return numbers
     
     def _extract_footnote_content(self, footnotes_text: str) -> Dict[int, str]:
         """
@@ -233,7 +248,8 @@ class FootnoteProcessor:
         current_content = []
         
         for line in lines:
-            match = pattern.match(line.strip())
+            stripped = line.strip()
+            match = pattern.match(stripped)
             
             if match:
                 # 保存之前的脚注内容
@@ -244,12 +260,16 @@ class FootnoteProcessor:
                 
                 # 开始新的脚注
                 # 提取所有连续的脚注符号
-                line_remainder = line.strip()
+                line_remainder = stripped
                 nums = []
                 while True:
                     m = pattern.match(line_remainder)
                     if m:
-                        nums.append(int(m.group(1)))
+                        raw = m.group(1)
+                        try:
+                            nums.append(self._normalize_footnote_number(raw))
+                        except ValueError as exc:
+                            raise ValueError(f"无法解析脚注编号 '{raw}': {exc}")
                         line_remainder = line_remainder[m.end():].strip()
                     else:
                         break
@@ -343,12 +363,36 @@ class FootnoteProcessor:
         pattern = re.compile(self.config.text_footnote_pattern)
         
         def replace_footnote(match):
-            num = int(match.group(1))
+            try:
+                num = self._normalize_footnote_number(match.group(1))
+            except ValueError:
+                return match.group(0)
             content = footnote_mapping.get(num, "")
             return self.config.output_footnote_format.format(content=content)
         
         result = pattern.sub(replace_footnote, text)
         return result
+
+    def _normalize_footnote_number(self, value: str) -> int:
+        """将各种数字符号转换为整数，支持①②③等形式"""
+        if value is None:
+            raise ValueError("编号为空")
+        raw = value.strip()
+        if not raw:
+            raise ValueError("编号为空")
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+        if len(raw) == 1:
+            try:
+                numeric_value = unicodedata.numeric(raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"无法识别的编号 {raw}") from exc
+            if float(numeric_value).is_integer():
+                return int(numeric_value)
+            raise ValueError(f"编号 {raw} 不是整数")
+        raise ValueError(f"无法识别的编号 {raw}")
 
 
 def main():
