@@ -263,13 +263,13 @@ def compare_with_names(pth, cls_pth = None):
 
 
 if __name__ == '__main__':
-    bdir = r'e:\图书馆\历史'
-    allclasspth = r'D:\works\目录编写\toc-list.txt'
+    bdir = r'/media/hh01/Elements SE/图书馆'
+    allclasspth = r'/home/hh01/Documents/works/目录编写/toc-list.txt'
     tmp = r'/media/hh01/Elements SE/阿里/先秦史古籍/难解'
     # extra_toc_from_note('toc-mod.md',note=False)
-    write_toc_file(tmp,())
-    # gg = compare_with_names(tmp,allclasspth)
-    # move_to_dir(bdir, gg)
+    # write_toc_file(tmp,())
+    gg = compare_with_names(tmp,allclasspth)
+    move_to_dir(bdir, gg)
     # compare_with_md5(bdir, r"e:\阿里\先秦史古籍")
     # find_same_md5(r'D:\Read\数学综合汇总')
     pass

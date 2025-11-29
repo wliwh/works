@@ -99,7 +99,7 @@ def process_json_to_md(json_file_path, output_md_path,
                 if title_text:
                     md_content_parts.append('#'*level + f" {title_text}")
 
-            elif save_text and block_type == 'text':
+            elif save_text and block_type in ('text','list'):
                 paragraph_text = get_text_from_block(block,block_type, fliter_fun)
                 if paragraph_text:
                     md_content_parts.append(paragraph_text)
