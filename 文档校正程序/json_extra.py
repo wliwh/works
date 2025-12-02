@@ -280,7 +280,7 @@ def process_markdown_pagination(input_file, output_file):
 # --- 主程序执行 ---
 if __name__ == '__main__':
     input_json_file = "D:\works\文档校正\sxln.json"
-    output_markdown_file = "D:\works\文档校正\二十世纪中国历史学2.md"
+    output_markdown_file = "/home/hh01/Documents/works/文档校正程序/foot/g1.md"
     # process_json_to_md(input_json_file, output_markdown_file, Save_Types.Text_Only, None)
-    process_markdown_pagination(output_markdown_file, 'D:\works\文档校正\二十世纪中国历史学3.md')
+    process_markdown_pagination(output_markdown_file, '/home/hh01/Documents/works/文档校正/国学入门 【CORR】.md')
     pass

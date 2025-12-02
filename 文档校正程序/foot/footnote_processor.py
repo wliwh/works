@@ -14,9 +14,9 @@ import json
 @dataclass
 class FootnoteConfig:
     """脚注配置类"""
-    section_delimiter: str = "========"  # 部分开始标志
-    text_footnote_pattern: str = r'([\u2460-\u2473])' # r'【(\d+)】'  # 正文中脚注符号的正则表达式
-    footnote_footnote_pattern: str = r'([\u2460-\u2473])' # r'【(\d+)】'  # 脚注中符号的正则表达式
+    section_delimiter: str = "======="  # 部分开始标志
+    text_footnote_pattern: str = r'\[(\d+)\]'     # r'([\u2460-\u2473])' # r'【(\d+)】'  # 正文中脚注符号的正则表达式
+    footnote_footnote_pattern: str = r'\[(\d+)\]' # r'([\u2460-\u2473])' # r'【(\d+)】'  # 脚注中符号的正则表达式
     output_footnote_format: str = "【{content}】"  # 输出时脚注内容的格式
     
 
@@ -86,6 +86,7 @@ class FootnoteProcessor:
         """
         sections = []
         pattern = f"{re.escape(self.config.section_delimiter)}([^\n]+)"
+        # pattern = f"{re.escape(self.config.section_delimiter)}(.+)"
         
         matches = list(re.finditer(pattern, content))
         
