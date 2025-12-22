@@ -220,6 +220,9 @@ if __name__ == "__main__":
         print(f"有问题的页码：{problems}")
     else:
         print("所有页面的脚注序号都正确")
+
+    # 1. 多(3-X)个月N元的利息
+    # 完整的利息
     
     # 如果需要处理文件，可以使用：
     # process_file('input.md', 'output.md')
