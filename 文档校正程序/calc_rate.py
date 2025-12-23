@@ -104,13 +104,18 @@ def get_repayment_details(principal, annual_rate, months, repayment_type):
         }
     
 def calc_method2(principal, r1, paid_ym, all_months:int=12*30, method:str = 'bx'):
-    paid_ym = paid_ym.replace('/','').replace('-','')
-    months = 12*(int(paid_ym[:4])-2026) + int(paid_ym[4:6])+1
+    if isinstance(paid_ym, str):
+        paid_ym = paid_ym.replace('/','').replace('-','')
+        months = 12*(int(paid_ym[:4])-2026) + int(paid_ym[4:6])+1
+        yms = f"{paid_ym[:4]}-{int(paid_ym[4:6])+1:02d}"
+    else:
+        months = paid_ym+1
+        yms = f"{paid_ym//12+2026}-{paid_ym%12+1:02d}"
     principal = principal if principal > 10000 else principal*10000
     r1 = r1 if r1<0.06 else r1/100.0
     method = "equal_interest" if method=='bx' else "equal_principal"
     details = get_repayment_details(principal, r1, all_months, method)['rs']
-    return f"{paid_ym[:4]}-{int(paid_ym[4:6])+1:02d}", months, sum(details[:months])
+    return yms, months, sum(details[:months])
 
 
 def calc_method1(principal, r2, ys=3):
@@ -127,41 +132,34 @@ def calc_month_n(month, r1, r2):
     y = int((ms-1)/12); m = int(ms-y*12)
     return ms, f'{2026+y}-{m}'
 
-from datetime import datetime
-
-def decimal_month_to_datetime(decimal_month):
-    """将小数格式月份转换为datetime，如2026.25 → 2026-03-01"""
-    year = int(decimal_month)
-    month_fraction = decimal_month - year
-    month = int(month_fraction * 12) + 1
-    month = min(max(month, 1), 12)  # 限制在1-12月
-    return datetime(year, month, 1)
 
 def plt_ratio():
     principal_amount = 10*10000  # Loan amount
     pay_interest_rate = 3 / 100.0  # 5% annual interest
     # repayment_months = 12*all_years  # 1 year
 
-    # font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-    # font = font_manager.FontProperties(fname=font_path)
+    font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+    font = font_manager.FontProperties(fname=font_path)
 
-    # rcParams["font.family"] = font.get_name()
-    # rcParams["axes.unicode_minus"] = False  # 解决负号显示为方块的问题
+    rcParams["font.family"] = font.get_name()
+    rcParams["axes.unicode_minus"] = False  # 解决负号显示为方块的问题
 
-    month_lst = [f"{y}-{m:02d}" for y in range(2026,2029) for m in range(1,13)]
+    month_lst = [f"{y}-{m:02d}" for y in range(26,29) for m in range(1,13)]
     month_num = np.array(list(range(1, len(month_lst)+1)))
     rate_lst = [x/100 for x in range(180, 265, 5)]
-    data = [(m, r, calc_method1(principal_amount, r, 3)/calc_method2(principal_amount, 3.0, m, 5*12, 'bj')[-1]) for m in month_lst for r in rate_lst]
-    data2 = [(m, r, calc_method1(principal_amount, r, 3)/calc_method2(principal_amount, pay_interest_rate, m, 30*12, 'bj')[-1]) for m in month_lst for r in rate_lst]
+    Ms = [(30*12, 3), (5*12, 3), (5*12, 2.8)]
+    line_colors = ['orange', 'red', 'Purple']
+    data = [(m, r, calc_method1(principal_amount, r, 3)/calc_method2(principal_amount, 3.0, m, 5*12, 'bj')[-1]) for m in month_num for r in rate_lst]
+    data2 = [(m, r, calc_method1(principal_amount, r, 3)/calc_method2(principal_amount, pay_interest_rate, m, 30*12, 'bj')[-1]) for m in month_num for r in rate_lst]
 
     df = pd.DataFrame(data, columns=['month', 'rate', 'ratio'])
     df = df.sort_values('month')          # 保证时间序
-    df.month = pd.to_datetime(df['month'], format='%Y-%m')
-    df.id_num = month_num
+    # df.month = pd.to_datetime(df['month'], format='%Y-%m')
+    # df.id_num = month_num
 
     df2 = pd.DataFrame(data2, columns=['month', 'rate', 'ratio'])
     df2 = df2.sort_values('month')          # 保证时间序
-    df2.month = pd.to_datetime(df2['month'], format='%Y-%m')
+    # df2.month = pd.to_datetime(df2['month'], format='%Y-%m')
 
     # 2. 颜色：绿色>1，红色≤1
     colors = []
@@ -187,16 +185,19 @@ def plt_ratio():
     # plt.scatter(df2.month, df2.rate, c=colors2, s=sizes, alpha=0.8, edgecolors='k', linewidth=0.3)
     # print(df.rate)
     plt.scatter(df.month, df.rate, c=colors, s=sizes, alpha=0.8, edgecolors='k', linewidth=0.3)
-    # 参考线
-    plt.axhline(y=1, color='gray', linestyle='--', linewidth=0.8)
+    for m, c in zip(Ms, line_colors):
+        l1 = [(calc_month_n(m[0], m[1], r2/100)[0]-1, r2/100) for r2 in range(180,266)]
+        lx, ly = [u[0] for u in l1], [u[1] for u in l1]
+        plt.plot(lx, ly, '--', color=c, linewidth=2, alpha=0.5, label=f'{m[0]//12}, {m[1]}%')
 
     # 5. 格式
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-    # plt.gca().xaxis.set_xticks(month_num)
-    # plt.gca().xaxis.set_xticklabels(month_lst)
+    # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    # plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    plt.gca().set_xticks(month_num)
+    plt.gca().set_xticklabels(month_lst)
     plt.ylim(1.75, 2.65)
     plt.xticks(rotation=60)
+    plt.legend()
     plt.ylabel('存款利率%')
     plt.title('存款更优还是还贷更优')
     plt.tight_layout()
@@ -206,23 +207,26 @@ def plt_ratio():
 
 def plt_rlines():
     Ms = [(30*12, 3), (5*12, 3), (5*12, 2.8)]
-    colors = ['orange', 'red', 'pink']
+    colors = ['orange', 'red', 'Purple']
     month_lst = [f"{y}-{m:02d}" for y in range(26,29) for m in range(1,13)]
+    plt.figure(figsize=(14, 6))
     for m, c in zip(Ms, colors):
         l1 = [(calc_month_n(m[0], m[1], r2/100)[0], r2/100) for r2 in range(180,266)]
         lx, ly = [u[0] for u in l1], [u[1] for u in l1]
-        plt.plot(lx, ly, color=c, linewidth=2, label='折线')
+        plt.plot(lx, ly, color=c, linewidth=2, label=f'{m[0]//12}, {m[1]}%')
     plt.gca().set_xticks(list(range(2, len(month_lst)+2)))
     plt.gca().set_xticklabels(month_lst)
     plt.ylim(1.75, 2.65)
     plt.xticks(rotation=60)
+    plt.legend()
     plt.grid(visible=True, which='major', axis='both', 
-            color='silver', linestyle='--', linewidth=0.8, alpha=0.5)
+            color='silver', linestyle='-', linewidth=0.8, alpha=0.5)
     plt.minorticks_on()
     plt.grid(visible=True, which='minor', axis='y', 
-            color='gainsboro', linestyle=':', linewidth=0.4, alpha=0.8)
+            color='gainsboro', linestyle='--', linewidth=0.6, alpha=0.8)
     plt.tight_layout()
-    plt.show()
+    plt.savefig('ratio_lines.png', dpi=300)
+    # plt.show()
     
 if __name__ == "__main__":
     # Example usage
@@ -231,7 +235,7 @@ if __name__ == "__main__":
     save_interest_rate = 2.0 / 100
     repayment_months = 12*5  # 1 year
 
-    # print(calc_method2(principal_amount, pay_interest_rate, '2028-08', repayment_months, 'bj'), calc_method1(principal_amount, save_interest_rate))
-    # plt_ratio()
+    # print(calc_method2(principal_amount, pay_interest_rate, 12, repayment_months, 'bj'), calc_method1(principal_amount, save_interest_rate))
     # print(calc_month_n(360, 3, 2.15))
-    plt_rlines()
+    plt_ratio()
+    # plt_rlines()
