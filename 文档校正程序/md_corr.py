@@ -140,4 +140,4 @@ def toc_file_corr(file_pth:str, add_num:int = 0):
 
 if __name__ == '__main__':
     # process_file(r'/home/hh01/Downloads/works/文档校正/hrlA.md', 220)
-    toc_file_corr(r"/home/hh01/Downloads/L/1引言.txt",14)
+    toc_file_corr(r"/home/hh01/Downloads/L/1引言.txt",16)
