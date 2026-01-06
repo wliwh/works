@@ -125,7 +125,8 @@ def toc_file_corr(file_pth:str, add_num:int = 0):
         lines = f.readlines()
     for l in lines:
         l = l.strip()
-        lr = re.match(r'^(\d+)\s+[\(\)\-p\d:]+\s+(.+)',l)
+        # lr = re.match(r'^(\d+)\s+[\(\)\-p\d:]+\s+(.+)',l)
+        lr = re.match(r'[\(\)\-p\d:]+\s+\(p(\d+)\):\s+(.+)',l)
         if lr:
             num = l.count('-')
             lr = lr.groups()
@@ -140,4 +141,4 @@ def toc_file_corr(file_pth:str, add_num:int = 0):
 
 if __name__ == '__main__':
     # process_file(r'/home/hh01/Downloads/works/文档校正/hrlA.md', 220)
-    toc_file_corr(r"/home/hh01/Downloads/L/1引言.txt",16)
+    toc_file_corr(r"D:\works\文档校正\傅斯年2.md", 20)
