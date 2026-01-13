@@ -12,7 +12,7 @@ def analyze_md_files(directory):
         print(f"Directory not found: {directory}")
         return
 
-    for filename in os.listdir(directory):
+    for filename in sorted(os.listdir(directory)):
         if filename.endswith('.md'):
             total_md_files += 1
             filepath = os.path.join(directory, filename)
@@ -44,9 +44,13 @@ def analyze_md_files(directory):
                 results.append({
                     'title': title or filename,
                     'date_str': last_line,
+                    'file_name': filename,
                     # For sorting, normalize YYYY/MM to YYYY/MM/99 to put it at the end of month
                     'sort_key': last_line if len(last_line) > 7 else f"{last_line}/99"
                 })
+            elif int(filename.split('[')[0]) < 40000:
+                # print(f"No date found in {filename}")
+                pass
 
     # Sort results by date
     results.sort(key=lambda x: x['sort_key'])
@@ -61,7 +65,10 @@ def analyze_md_files(directory):
     
     # Output list
     for entry in results:
-        print(f"{entry['date_str']}\t{entry['title']}")
+        date = entry['date_str']
+        tab_str = "\t" if len(date) > 7 else "\t\t"
+        print(f"{date}{tab_str}{entry['file_name']}\t{entry['title']}")
+        pass
 
 if __name__ == "__main__":
     target_dir = "/home/hh01/Documents/works/文档校正程序/scrapy/articles_md"
