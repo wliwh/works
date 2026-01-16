@@ -63,6 +63,10 @@ class PunctuationConverter:
         '(': '（', ')': '）',
         '<': '《', '>': '》',
         '-': '—', '_': '——',
+        # 以下根据需要启用
+        # '[': '【', ']': '】', '{': '｛', '}': '｝',
+        # '@': '＠', '#': '＃', '$': '￥', '%': '％', '^': '＾', '&': '＆', '*': '＊',
+        # '+': '＋', '=': '＝', '|': '｜', '\\': '＼', '/': '／', '`': '｀', '~': '～'
     }
     
     @classmethod
@@ -167,33 +171,46 @@ class TextProcessor:
     def extract_pages(self, file_path: str, start_page: int = 1, end_page: Optional[int] = None) -> List[Tuple[int, str]]:
         """提取页面内容"""
         pages = []
-        current_page = start_page
+        current_page = 0
         current_content = []
+        found_start = False
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
                 
             for line in lines:
-                page_marker = f"{self.config.page_marker}{current_page}"
-                next_marker = f"{self.config.page_marker}{current_page + 1}"
-                
-                if line.startswith(page_marker + '\n'):
-                    if current_content:
-                        pages.append((current_page - 1, ''.join(current_content)))
-                        current_content = []
-                elif line.startswith(next_marker + '\n'):
-                    if current_content:
-                        pages.append((current_page - 1, ''.join(current_content)))
-                        current_content = []
-                    current_page += 1
-                    if end_page and current_page > end_page:
+                # 检查是否是所有可能的分页标记 (========n, ========n****, ========n=====)
+                if line.startswith(self.config.page_marker):
+                    # 尝试从行中提取页码
+                    match = re.search(r'(\d+)', line)
+                    if not match:
+                        if found_start:
+                            current_content.append(line)
+                        continue
+                    
+                    page_num = int(match.group(1))
+                    
+                    if page_num == start_page:
+                        found_start = True
+                    elif end_page and page_num > end_page:
+                        if found_start and current_content:
+                            pages.append((current_page, ''.join(current_content)))
+                        found_start = False
                         break
-                else:
+                    
+                    if found_start:
+                        if current_content:
+                            pages.append((current_page, ''.join(current_content)))
+                        current_page = page_num
+                        current_content = []
+                    continue
+                
+                if found_start:
                     current_content.append(line)
             
-            if current_content:
-                pages.append((current_page - 1, ''.join(current_content)))
+            if found_start and current_content:
+                pages.append((current_page, ''.join(current_content)))
                 
         except Exception as e:
             logger.error(f"读取文件失败: {e}")
@@ -375,6 +392,9 @@ def main():
     parser.add_argument('--mode', choices=['page', 'block'], default='page', help='处理模式')
     parser.add_argument('--start', type=int, default=1, help='起始页码/行号')
     parser.add_argument('--end', type=int, default=0, help='结束页码/行号 (0表示到文件末尾)')
+    parser.add_argument('--suffix', help='输出文件后缀 (默认为 _corrected)')
+    parser.add_argument('--marker', help='页面分隔符标记 (默认为 =========)')
+    parser.add_argument('--model', help='指定模型名称 (Ark模型)')
     parser.add_argument('--config', default='config.json', help='配置文件路径')
     parser.add_argument('--use-ollama', action='store_true', help='使用Ollama API')
     
@@ -382,6 +402,14 @@ def main():
     
     # 加载配置
     config = load_config(args.config)
+    
+    # CLI覆盖配置
+    if args.suffix:
+        config.output_suffix = args.suffix
+    if args.marker:
+        config.page_marker = args.marker
+    if args.model:
+        config.ark_model = args.model
     
     # 创建处理器
     processor = TextProcessor(config)
