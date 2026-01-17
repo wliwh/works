@@ -57,6 +57,7 @@ def reformat_markdown_citations(input_file, output_file):
     print(f"处理完成！文件已保存为: {output_file}")
     
     # 打印部分预览
+
     print("-" * 30)
     print("处理结果预览 (前500字符):")
     print(new_content[:500])

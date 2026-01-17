@@ -2,33 +2,56 @@ import os
 import re
 
 def is_cjk(char):
-    """检查一个字符是否是中日韩（CJK）统一表意文字（即汉字）。"""
-    return '\u4e00' <= char <= '\u9fa5'
+    """检查一个字符是否是中日韩（CJK）统一表意文字或中文标点。"""
+    if not char: return False
+    # 汉字范围
+    if '\u4e00' <= char <= '\u9fa5': return True
+    # 中文标点及符号范围 (常见如 。，、？！：；（）“”‘’【】——)
+    if '\u3000' <= char <= '\u303f' or '\uff00' <= char <= '\uffef': return True
+    return False
+
+def is_near_chinese(text, pos):
+    """检查文本指定位置附近是否有汉字或中文标点（跳过空格）。"""
+    # 向前检查
+    j = pos - 1
+    while j >= 0 and text[j] in (' ', '\t'): j -= 1
+    if j >= 0 and is_cjk(text[j]): return True
+    # 向后检查
+    j = pos + 1
+    while j < len(text) and text[j] in (' ', '\t'): j += 1
+    if j < len(text) and is_cjk(text[j]): return True
+    return False
 
 def replace_quotes_smartly(text):
     """
     智能地替换英文单双引号为中文对应引号。
-    通过状态跟踪来判断是开引号还是闭引号。
+    仅当引号靠近中文字符时才进行转换，以保护英文短语或句子。
     """
     in_single_quotes = False
     in_double_quotes = False
     result_chars = []
 
-    for char in text:
+    for i, char in enumerate(text):
         if char == "'":
-            if not in_single_quotes:
-                result_chars.append('‘')
-                in_single_quotes = True
+            if is_near_chinese(text, i):
+                if not in_single_quotes:
+                    result_chars.append('‘')
+                    in_single_quotes = True
+                else:
+                    result_chars.append('’')
+                    in_single_quotes = False
             else:
-                result_chars.append('’')
-                in_single_quotes = False
+                result_chars.append(char)
         elif char == '"':
-            if not in_double_quotes:
-                result_chars.append('“')
-                in_double_quotes = True
+            if is_near_chinese(text, i):
+                if not in_double_quotes:
+                    result_chars.append('“')
+                    in_double_quotes = True
+                else:
+                    result_chars.append('”')
+                    in_double_quotes = False
             else:
-                result_chars.append('”')
-                in_double_quotes = False
+                result_chars.append(char)
         else:
             result_chars.append(char)
             
@@ -37,13 +60,13 @@ def replace_quotes_smartly(text):
 
 def process_text(lines, beg:int=0):
     """
-    处理文本，执行四个主要操作：
-    1. 合并特定模式的相邻三段。
-    2. 删除非注释段落中的空格。
-    3. 将英文标点替换为中文标点（除引号外）。
-    4. 智能地替换英文引号为中文引号。
+    处理文本，执行以下主要操作：
+    1. 合并由于OCR识别导致的断行（任务1）。
+    2. 智能清理空格：仅删除汉字之间的空格。
+    3. 智能标点转换：仅在汉字相邻（含空格）时转换英文标点为中文标点，并清理随后的空格。
+    4. 智能引号转换：仅在汉字相邻时转换。
     """
-    # --- 任务1: 处理相邻的三段 ---
+    # --- 任务1: 处理相邻的三段 (合并OCR断行) ---
     i = beg
     while i < len(lines) - 2:
         line1 = lines[i]
@@ -56,7 +79,7 @@ def process_text(lines, beg:int=0):
         cond1 = False
         if line1_stripped:
             last_char = line1_stripped[-1]
-            if not line1_stripped.startswith('#') and (is_cjk(last_char) or last_char in [',', '，','、']):
+            if not line1_stripped.startswith('#') and (is_cjk(last_char) or last_char in [',', '.', '?', '!', '，', '。', '？', '！', '、']):
                 cond1 = True
 
         cond2 = (line2 == '\n')
@@ -72,41 +95,58 @@ def process_text(lines, beg:int=0):
     # --- 任务2, 3, 4: 处理剩余的行 ---
     processed_lines = []
     
-    # 定义英文到中文的标点转换映射 (不包括引号)
     punctuation_map = {
-        ",": "，",
-        ".": "。",
-        "?": "？",
-        "!": "！",
-        ":": "：",
-        ";": "；",
-        "(": "（",
-        ")": "）",
-        "[": "【",
-        "]": "】",
-        "”":"\"",
-        "“":"\"",
-        "‘":"'",
-        "’":"'"
+        ",": "，", ".": "。", "?": "？", "!": "！",
+        ":": "：", ";": "；", "(": "（", ")": "）",
+        "[": "【", "]": "】", "{": "｛", "}": "｝"
     }
 
-    for i,line in enumerate(lines):
-        if i<=beg:
+    for idx, line in enumerate(lines):
+        if idx <= beg:
             processed_lines.append(line)
-        else:
-            # 任务2: 删去不是以#开头的段落中的空格
-            if not line.strip().startswith('#'):
-                line = line.replace(' ', '')
+            continue
+        
+        if line.strip().startswith('![]('):
+            processed_lines.append(line)
+            continue
 
-            if not line.strip().startswith('![]('):
-                # 任务3: 将简单的英文标点换成中文
-                for eng_punc, chn_punc in punctuation_map.items():
-                    line = line.replace(eng_punc, chn_punc)
-                    
-                # 任务4: 智能地处理引号
-                line = replace_quotes_smartly(line)
-                
+        # 检查是否包含中文。如果不含中文，视作英文行，不处理（满足要求2）
+        if not any(is_cjk(c) for c in line):
             processed_lines.append(line)
+            continue
+
+        # 定义 CJK 字符类（含汉字和中文标点）
+        cjk_class = r'[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]'
+
+        # 任务2: 智能删除空格 (仅删除汉字之间的空格)
+        line = re.sub(r'(?<=[\u4e00-\u9fa5])\s+(?=[\u4e00-\u9fa5])', '', line)
+
+        # 任务2: 智能删除空格 (仅删除汉字之间的空格)
+        line = re.sub(r'(?<=[\u4e00-\u9fa5])\s+(?=[\u4e00-\u9fa5])', '', line)
+
+        # 任务4: 智能处理引号 (初次处理，基于上下文识别开关引号)
+        line = replace_quotes_smartly(line)
+
+        # 任务3: 智能转换标点 (满足要求1 & 2 & 3)
+        # 多次循环以处理由于标点转换后产生的新 CJK 邻接关系（如 “你好”. -> “你好”。）
+        cjk_class = r'[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]'
+        for _ in range(2): 
+            for eng_punc, chn_punc in punctuation_map.items():
+                if eng_punc in '[]' and ('[' + eng_punc in line or eng_punc + '](' in line):
+                    continue
+                # 任务3.1: 转换英文标点为中文标点
+                esc = re.escape(eng_punc)
+                line = re.sub(f'({cjk_class})\\s*{esc}\\s*', f'\\1{chn_punc}', line)
+                line = re.sub(f'{esc}\\s*({cjk_class})', f'{chn_punc}\\1', line)
+                
+            # 任务3.2: 额外处理已转换的引号与剩余英文标点的关系
+            # 例如处理这种情况: "你好", -> “你好”，
+            line = re.sub(f'([“”‘’])\\s*([,.?!:;])\\s*', 
+                          lambda m: m.group(1) + punctuation_map.get(m.group(2), m.group(2)), line)
+            line = re.sub(f'([,.?!:;])\\s*([“”‘’])', 
+                          lambda m: punctuation_map.get(m.group(1), m.group(1)) + m.group(2), line)
+        
+        processed_lines.append(line)
 
     return "".join(processed_lines)
 
@@ -119,26 +159,6 @@ def process_file(file_pth, beg:int=200):
         wf.write(output_words)
 
 
-def toc_file_corr(file_pth:str, add_num:int = 0):
-    toc_lst = list()
-    with open(file_pth,'r',encoding='utf-8') as f:
-        lines = f.readlines()
-    for l in lines:
-        l = l.strip()
-        # lr = re.match(r'^(\d+)\s+[\(\)\-p\d:]+\s+(.+)',l)
-        lr = re.match(r'[\(\)\-p\d:]+\s+\(p(\d+)\):\s+(.+)',l)
-        if lr:
-            num = l.count('-')
-            lr = lr.groups()
-            nline = ' '*(4*num) + lr[1] + f' {(int(lr[0])+add_num)}'
-            toc_lst.append(nline)
-        else:
-            toc_lst.append(l)
-    out_pth = os.path.splitext(file_pth)[0] + '_corr.txt'
-    with open(out_pth,'w',encoding='utf-8') as wf:
-        wf.write('\n'.join(toc_lst))
-
-
 if __name__ == '__main__':
     # process_file(r'/home/hh01/Downloads/works/文档校正/hrlA.md', 220)
-    toc_file_corr(r"D:\works\文档校正\傅斯年2.md", 20)
+    pass
