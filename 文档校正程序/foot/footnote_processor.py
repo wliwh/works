@@ -85,10 +85,11 @@ class FootnoteProcessor:
             (部分ID, 部分内容) 的列表
         """
         sections = []
-        pattern = f"{re.escape(self.config.section_delimiter)}([^\n]+)"
-        # pattern = f"{re.escape(self.config.section_delimiter)}(.+)"
+        # pattern = f"{re.escape(self.config.section_delimiter)}([^\n]+)"
+        pattern = f"^{re.escape(self.config.section_delimiter)}(.+)"
+        # pattern = r"^###\s(.+)"
         
-        matches = list(re.finditer(pattern, content))
+        matches = list(re.finditer(pattern, content, re.MULTILINE))
         
         for i, match in enumerate(matches):
             section_id = match.group(1).strip()
