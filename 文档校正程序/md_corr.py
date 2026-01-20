@@ -79,8 +79,12 @@ def process_text(lines, beg:int=0):
         cond1 = False
         if line1_stripped:
             last_char = line1_stripped[-1]
-            if not line1_stripped.startswith('#') and (is_cjk(last_char) or last_char in [',', '.', '?', '!', '，', '。', '？', '！', '、']):
-                cond1 = True
+            # 只有当行尾不是结束标点（句号、问号、感叹号）时，才考虑合并
+            closing_puncts = ['。', '？', '！', '.', '?', '!']
+            if not line1_stripped.startswith('#') and last_char not in closing_puncts:
+                # 必须是 CJK 字符或逗号/顿号等非结束标点
+                if is_cjk(last_char) or last_char in [',', '，', '、']:
+                    cond1 = True
 
         cond2 = (line2 == '\n')
         cond3 = line3_stripped and not line3_stripped.startswith('#')
@@ -160,5 +164,5 @@ def process_file(file_pth, beg:int=200):
 
 
 if __name__ == '__main__':
-    # process_file(r'/home/hh01/Downloads/works/文档校正/hrlA.md', 220)
+    process_file(r"D:\works\文档校正\temp_chap2.md", 1)
     pass
