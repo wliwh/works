@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 import shutil
-from api_handler import create_api_handler
+from handle.api_handler import create_api_handler
 os.chdir(Path(__file__).parent)
 
 Rename_Prompt = """书名提取工具，从若干书名中提取信息，输出要求为json格式。

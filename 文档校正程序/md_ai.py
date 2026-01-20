@@ -14,7 +14,7 @@ from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from tqdm import tqdm
-from api_handler import create_api_handler
+from handle.api_handler import create_api_handler
 
 
 # 配置日志

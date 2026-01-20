@@ -48,7 +48,7 @@ def analyze_md_files(directory):
                     # For sorting, normalize YYYY/MM to YYYY/MM/99 to put it at the end of month
                     'sort_key': last_line if len(last_line) > 7 else f"{last_line}/99"
                 })
-            elif int(filename.split('[')[0]) < 60000:
+            elif int(filename.split('[')[0]) < 70000:
                 print(f"No date found in {filename}")
                 pass
 
