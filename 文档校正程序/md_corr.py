@@ -164,5 +164,5 @@ def process_file(file_pth, beg:int=200):
 
 
 if __name__ == '__main__':
-    process_file(r"D:\works\文档校正\temp_chap2.md", 1)
+    process_file(r"/home/hh01/Documents/works/文档校正/道教概说_20260123090224.md", 2000)
     pass
