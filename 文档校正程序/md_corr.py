@@ -80,7 +80,7 @@ def process_text(lines, beg:int=0):
         if line1_stripped:
             last_char = line1_stripped[-1]
             # 只有当行尾不是结束标点（句号、问号、感叹号）时，才考虑合并
-            closing_puncts = ['。', '？', '！', '.', '?', '!']
+            closing_puncts = ['。', '？', '！', '.', '?', '!', ':', '：']
             if not line1_stripped.startswith('#') and last_char not in closing_puncts:
                 # 必须是 CJK 字符或逗号/顿号等非结束标点
                 if is_cjk(last_char) or last_char in [',', '，', '、']:
