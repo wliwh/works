@@ -164,5 +164,5 @@ def process_file(file_pth, beg:int=200):
 
 
 if __name__ == '__main__':
-    process_file(r"/home/hh01/Documents/works/文档校正/道教概说_20260123090224.md", 2000)
+    process_file(r"/home/hh01/Downloads/MinerU2.md", 41)
     pass
