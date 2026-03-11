@@ -286,7 +286,7 @@ def process_json_to_md(json_file_path, output_md_path,
 
 
 if __name__ == '__main__':
-    input = "/home/hh01/Documents/works/文档校正/MinerU_二十世纪中国历史学.json"
-    output = "/home/hh01/Documents/works/文档校正/二十世纪中国历史学.md"
+    input = "/home/hh01/Documents/works/文档校正/经学的瓦解.json"
+    output = "/home/hh01/Documents/works/文档校正/经学的瓦解.md"
     process_json_to_md(input, output, Save_Types.Text_Image_Foot)
     pass
