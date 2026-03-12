@@ -15,9 +15,12 @@ import json
 class FootnoteConfig:
     """脚注配置类"""
     section_delimiter: str = "======="  # 部分开始标志
-    text_footnote_pattern: str = r'([\u2460-\u2473])'     # r'([\u2460-\u2473])' # r'【(\d+)】'  # 正文中脚注符号的正则表达式
-    footnote_footnote_pattern: str = r'([\u2460-\u2473])' # r'([\u2460-\u2473])' # r'【(\d+)】'  # 脚注中符号的正则表达式
+    # 扩展正则范围：包含 ①-⑳ (\u2460-\u2473), ㉑-㊿ 和更多带圈字符
+    text_footnote_pattern: str = r'([\u2460-\u24FF\u3251-\u32BF])'
+    footnote_footnote_pattern: str = r'([\u2460-\u24FF\u3251-\u32BF])'
     output_footnote_format: str = "【{content}】"  # 输出时脚注内容的格式
+    newline_char: str = "<br/>"  # 脚注内容内部多行合并时的分隔符
+    enable_page_break_check: bool = False  # 是否开启分页连贯性检查
     
 
 class FootnoteProcessor:
@@ -52,13 +55,19 @@ class FootnoteProcessor:
         sections = self._split_sections(content)
         
         # 处理每个部分
-        processed_sections = []
+        processed_sections_data = [] # 存储 (section_id, processed_content)
         for section_id, section_content in sections:
             processed_section = self._process_section(section_id, section_content)
             if processed_section:
-                processed_sections.append(f"{self.config.section_delimiter}{section_id}\n{processed_section}")
+                processed_sections_data.append((section_id, processed_section))
         
+        # 分页连贯性检查
+        break_pages = []
+        if self.config.enable_page_break_check and len(processed_sections_data) > 1:
+            processed_sections_data, break_pages = self._identify_page_breaks(processed_sections_data)
+
         # 组合处理后的内容
+        processed_sections = [f"{self.config.section_delimiter}{sid}\n{content}" for sid, content in processed_sections_data]
         result = '\n\n'.join(processed_sections)
         
         # 输出错误信息
@@ -66,6 +75,11 @@ class FootnoteProcessor:
             print("处理过程中发现以下错误：")
             for error in self.errors:
                 print(f"  - {error}")
+        
+        # 输出分页检查结果 (仅显示类型3：标点/脚注标记断开)
+        if self.config.enable_page_break_check and break_pages:
+            print("\n分页连贯性检查 - 发现以下断开页 (由标点或脚注标记导致)：")
+            print(f"  页码: {', '.join(break_pages)}")
         # 如果指定了输出路径，写入文件
         elif output_path:
             with open(output_path, 'w', encoding='utf-8') as f:
@@ -256,7 +270,10 @@ class FootnoteProcessor:
             if match:
                 # 保存之前的脚注内容
                 if current_nums and current_content:
-                    content = '<br/>'.join(current_content)
+                    # 自动去掉最后一个以及结尾的所有空换行符
+                    while current_content and not current_content[-1].strip():
+                        current_content.pop()
+                    content = self.config.newline_char.join(current_content)
                     for num in current_nums:
                         mapping[num] = content
                 
@@ -285,7 +302,10 @@ class FootnoteProcessor:
         
         # 保存最后一个脚注
         if current_nums and current_content:
-            content = '<br/>'.join(current_content)
+            # 自动去掉最后一个以及结尾的所有空换行符
+            while current_content and not current_content[-1].strip():
+                current_content.pop()
+            content = self.config.newline_char.join(current_content)
             for num in current_nums:
                 mapping[num] = content
         
@@ -374,6 +394,94 @@ class FootnoteProcessor:
         
         result = pattern.sub(replace_footnote, text)
         return result
+
+    def _is_cjk(self, char: str) -> bool:
+        """检查一个字符是否是中日韩（CJK）统一表意文字或中文标点。"""
+        if not char: return False
+        # 汉字、中文标点及符号范围
+        try:
+            name = unicodedata.name(char)
+            if 'CJK UNIFIED IDEOGRAPH' in name or 'CJK COMPATIBILITY IDEOGRAPH' in name:
+                return True
+            # 常见中文标点符号范围
+            if '\u3000' <= char <= '\u303f' or '\uff01' <= char <= '\uff5e':
+                return True
+            if char in r'—“”’‘…〈〉《》「」『』【】〔〕':
+                return True
+        except (ValueError, TypeError):
+            pass
+        return False
+
+    def _identify_page_breaks(self, sections: List[Tuple[str, str]]) -> Tuple[List[Tuple[str, str]], List[str]]:
+        """
+        识别分页连贯性并注入标记
+        
+        Returns:
+            (处理后的 sections, 类型3断开的页码列表)
+        """
+        new_sections = []
+        break_pages = []
+        
+        closing_punts = ['。', '.', '？', '！', '?', '!']
+        # 提取脚注格式中的结束符，例如 "【{content}】" 提取出 "】"
+        footnote_end_char = ""
+        if '}' in self.config.output_footnote_format:
+            suffix = self.config.output_footnote_format.split('}')[-1]
+            if suffix:
+                footnote_end_char = suffix[0]
+
+        for i in range(len(sections)):
+            sid, content = sections[i]
+            if i == len(sections) - 1:
+                new_sections.append((sid, content))
+                break
+                
+            next_sid, next_content = sections[i+1]
+            
+            # 预处理获取边界行
+            lines = content.strip().split('\n')
+            last_line = lines[-1].strip() if lines else ""
+            
+            next_lines = next_content.strip().split('\n')
+            first_line = next_lines[0].strip() if next_lines else ""
+            
+            is_break = False
+            is_type_3 = False
+            
+            # 断开判定 (严格模式)
+            if last_line.startswith('#'): # 类型1
+                is_break = True
+            elif first_line.startswith('#'): # 类型2
+                is_break = True
+            elif last_line:
+                last_char = last_line[-1]
+                if last_char in closing_punts or (footnote_end_char and last_char == footnote_end_char): # 类型3
+                    is_break = True
+                    is_type_3 = True
+            
+            # 连贯判定 (收紧条件：CJK、逗号、顿号)
+            is_nobreak = False
+            if not is_break and last_line:
+                last_char = last_line[-1]
+                if self._is_cjk(last_char) or last_char in [',', '，', '、']:
+                    is_nobreak = True
+            
+            # 注入标记
+            marker = ""
+            if is_break:
+                marker = "<break>"
+                if is_type_3:
+                    break_pages.append(sid)
+            elif is_nobreak:
+                marker = "<nobreak>"
+                
+            if marker:
+                # 在最后一个端落末尾添加标记
+                content = content.rstrip() + marker
+            
+            new_sections.append((sid, content))
+            
+        return new_sections, break_pages
 
     def _normalize_footnote_number(self, value: str) -> int:
         """将各种数字符号转换为整数，支持①②③等形式"""
