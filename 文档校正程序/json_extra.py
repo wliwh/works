@@ -14,24 +14,61 @@ class Save_Types(Enum):
     Text_Only = 2
     Image_Only = 3
 
-def get_text_from_block(block,btype, fliter_fun:Optional[Callable] = None):
-    """从一个块（block）中提取并拼接所有文本内容。"""
-    full_text = []
+def get_text_from_block(block, btype, fliter_fun: Optional[Callable] = None):
+    """从块中提取文本。对于 list 类型，采用迭代（栈）方式处理嵌套。"""
     if 'lines' in block:
-        fres = True if fliter_fun is None else fliter_fun(block,btype)
-        if fres:
-            for line in block.get('lines', []):
-                line_text = []
-                if 'spans' in line:
-                    for span in line.get('spans', []):
-                        if span.get('type') in ('text','inline_equation') and 'content' in span:
-                            if span['type'] == 'inline_equation':
-                                cont = f"${span['content']}$"
-                            else:
-                                cont = span['content']
-                            line_text.append(cont)
-                full_text.append("".join(line_text))
-    return "".join(full_text)
+        return get_text_basic(block, btype, fliter_fun)
+    
+    if btype != 'list' or 'blocks' not in block:
+        return ""
+
+    # 使用栈模拟递归，处理嵌套的 list
+    # 栈元素格式: [子块迭代器, 已收集的文本列表]
+    stack = [[iter(block['blocks']), []]]
+    
+    while stack:
+        it, collected = stack[-1]
+        try:
+            curr_item = next(it)
+            if 'lines' in curr_item:
+                text = get_text_basic(curr_item, btype, fliter_fun)
+                if text:
+                    collected.append(text)
+            elif btype == 'list' and 'blocks' in curr_item:
+                # 遇到嵌套 list，压入新层次
+                stack.append([iter(curr_item['blocks']), []])
+        except StopIteration:
+            # 当前层级处理完毕，弹出并合并结果
+            _, finished_collected = stack.pop()
+            joined = "\n".join(finished_collected)
+            
+            if not stack:
+                return joined
+            
+            if joined:
+                stack[-1][1].append(joined)
+    return ""
+
+def get_text_basic(block, btype, fliter_fun=None):
+    """从一个具有 lines 的块（block）中提取并拼接所有文本内容。"""
+    if 'lines' not in block:
+        return ""
+    
+    if fliter_fun and not fliter_fun(block, btype):
+        return ""
+        
+    lines_text = []
+    for line in block.get('lines', []):
+        spans = line.get('spans', [])
+        # 使用列表推导式提取并转换 span 内容
+        line_content = "".join(
+            f"${s['content']}$" if s['type'] == 'inline_equation' else s['content']
+            for s in spans
+            if s.get('type') in ('text', 'inline_equation') and 'content' in s
+        )
+        lines_text.append(line_content)
+        
+    return "".join(lines_text)
 
 
 def parse_title_level(text):
@@ -286,8 +323,7 @@ def process_json_to_md(json_file_path, output_md_path,
 
 
 if __name__ == '__main__':
-    file_name = '经学的瓦解.json'
-    out_name = file_name.replace('.json', '.md')
-    base_dir = os.path.join(os.path.dirname(__file__),'..', '文档校正')
-    process_json_to_md(os.path.join(base_dir, file_name), os.path.join(base_dir, out_name), Save_Types.Text_Image_Foot)
+    input = "D:\works\文档校正\经学的瓦解.json"
+    output = "D:\works\文档校正\经学的瓦解2.md"
+    process_json_to_md(input, output, Save_Types.Text_Image_Foot)
     pass
