@@ -286,7 +286,8 @@ def process_json_to_md(json_file_path, output_md_path,
 
 
 if __name__ == '__main__':
-    input = "/home/hh01/Documents/works/文档校正/经学的瓦解.json"
-    output = "/home/hh01/Documents/works/文档校正/经学的瓦解.md"
-    process_json_to_md(input, output, Save_Types.Text_Image_Foot)
+    file_name = '经学的瓦解.json'
+    out_name = file_name.replace('.json', '.md')
+    base_dir = os.path.join(os.path.dirname(__file__),'..', '文档校正')
+    process_json_to_md(os.path.join(base_dir, file_name), os.path.join(base_dir, out_name), Save_Types.Text_Image_Foot)
     pass

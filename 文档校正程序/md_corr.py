@@ -218,5 +218,5 @@ def process_file(file_pth, beg:int=200):
 
 
 if __name__ == '__main__':
-    process_file(r"D:\works\文档校正\未央河月：最终的编曲 虎山.md", 1)
+    process_file(os.path.join(os.path.dirname(__file__), '..', '文档校正/未央河月：最终的编曲 虎山.md'), 1)
     pass
