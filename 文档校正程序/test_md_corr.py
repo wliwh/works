@@ -21,8 +21,7 @@ def test_is_cjk():
     # 测试中文标点
     chs = r'在。，！？（）“”’‘【】——'
     for c in chs:
-        if not is_cjk(c):
-            print(c)
+        assert is_cjk(c) == True
     assert is_cjk('。') == True
     assert is_cjk('，') == True
     assert is_cjk('！') == True

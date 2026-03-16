@@ -1,11 +1,15 @@
 import json
 import re
-import os
-import requests
-from urllib.parse import urlparse
+import logging
 from typing import Callable, Optional, List, Dict, Any, Union
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 @dataclass
 class ExtractorConfig:
@@ -38,14 +42,15 @@ class ExtractorConfig:
 
 class TitleParser:
     """处理标题级别解析。"""
-    def __init__(self, patterns: List[Dict[str, Union[str, int]]], default_level: int):
-        self.patterns = patterns
+    def __init__(self, patterns: List[Dict[str, Any]], default_level: int):
         self.default_level = default_level
+        self._compiled = [(re.compile(item["pattern"]), int(item["level"])) for item in patterns]
 
     def get_level(self, text: str) -> int:
-        for item in self.patterns:
-            if re.match(item["pattern"], text.strip()):
-                return item["level"]
+        text = text.strip()
+        for pattern, level in self._compiled:
+            if pattern.match(text):
+                return level
         return self.default_level
 
 class TextExtractor:
@@ -109,6 +114,13 @@ class TextExtractor:
                     stack[-1][1].append(joined)
         return ""
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
 class MarkdownConverter:
     """主逻辑：解析 JSON 并生成 Markdown。"""
     def __init__(self, config: ExtractorConfig):
@@ -116,13 +128,20 @@ class MarkdownConverter:
         self.extractor = TextExtractor(config)
         self.title_parser = TitleParser(config.title_patterns, config.default_title_level)
 
-    def _download_image(self, image_url: str, asset_dir: Path, page_idx: int) -> str:
+    def _download_image(self, image_url: str, asset_dir: Optional[Path], page_idx: int) -> str:
         """下载图片并返回本地路径。"""
+        if requests is None:
+            logger.warning("requests library not installed, cannot download image")
+            return image_url
+        
+        if asset_dir is None:
+            return image_url
+        
         try:
             response = requests.get(image_url, stream=True, timeout=10)
             response.raise_for_status()
             
-            filename = os.path.basename(urlparse(image_url).path)
+            filename = Path(urlparse(image_url).path).name
             local_filename = f"{page_idx:04d}@{filename}"
             local_path = asset_dir / local_filename
             
@@ -131,18 +150,17 @@ class MarkdownConverter:
                     f.write(chunk)
             return str(local_path)
         except Exception as e:
-            print(f"Warning: Failed to download image {image_url}: {e}")
+            logger.warning("Failed to download image %s: %s", image_url, e)
             return image_url
 
-    def convert(self, json_path: str, output_path: str):
+    def convert(self, json_path: Path, output_path: Path):
         """执行转换流程。"""
         json_path = Path(json_path)
         output_path = Path(output_path)
         
         if self.config.save_images:
-            # 修改图片保存路径，使其与 JSON 文件名相关
             asset_dir_name = f"{json_path.stem}.assets"
-            asset_dir = json_path.parent / asset_dir_name
+            asset_dir: Optional[Path] = json_path.parent / asset_dir_name
             asset_dir.mkdir(exist_ok=True)
         else:
             asset_dir = None
@@ -185,7 +203,7 @@ class MarkdownConverter:
                         local_abs_path = self._download_image(img_url, asset_dir, page_idx)
                         # 使用相对于 markdown 文件的文件夹路径
                         if local_abs_path != img_url:
-                            local_filename = os.path.basename(local_abs_path)
+                            local_filename = Path(local_abs_path).name
                             local_rel_path = f"{asset_dir_name}/{local_filename}"
                         else:
                             local_rel_path = img_url
