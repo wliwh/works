@@ -11,9 +11,11 @@ try:
 except ImportError:
     requests = None
 
+
 @dataclass
 class ExtractorConfig:
     """提取器配置类，增强用户自定义能力。"""
+
     # 提取开关
     save_text: bool = True
     save_images: bool = True
@@ -23,11 +25,13 @@ class ExtractorConfig:
     save_footer: bool = False
 
     # 标题解析配置：正则表达式映射到标题层级
-    title_patterns: List[Dict[str, Union[str, int]]] = field(default_factory=lambda: [
-        {"pattern": r'^第[一二三四五六七八九十]{1,2}章', "level": 2},
-        {"pattern": r'^第[一二三四五六七八九十]{1,2}节', "level": 3},
-        {"pattern": r'^[一二三四五六七八九十]{1,2}', "level": 4},
-    ])
+    title_patterns: List[Dict[str, Union[str, int]]] = field(
+        default_factory=lambda: [
+            {"pattern": r"^第[一二三四五六七八九十]{1,2}章", "level": 2},
+            {"pattern": r"^第[一二三四五六七八九十]{1,2}节", "level": 3},
+            {"pattern": r"^[一二三四五六七八九十]{1,2}", "level": 4},
+        ]
+    )
     default_title_level: int = 2
 
     # 样式配置
@@ -40,11 +44,15 @@ class ExtractorConfig:
     # 比如过滤宽度过窄的块或特定区域
     coordinate_filter: Optional[Callable[[Dict[str, Any], str], bool]] = None
 
+
 class TitleParser:
     """处理标题级别解析。"""
+
     def __init__(self, patterns: List[Dict[str, Any]], default_level: int):
         self.default_level = default_level
-        self._compiled = [(re.compile(item["pattern"]), int(item["level"])) for item in patterns]
+        self._compiled = [
+            (re.compile(item["pattern"]), int(item["level"])) for item in patterns
+        ]
 
     def get_level(self, text: str) -> int:
         text = text.strip()
@@ -53,58 +61,62 @@ class TitleParser:
                 return level
         return self.default_level
 
+
 class TextExtractor:
     """核心文本提取逻辑。"""
+
     def __init__(self, config: ExtractorConfig):
         self.config = config
 
     def get_text_basic(self, block: Dict[str, Any], btype: str) -> str:
         """从具有 lines 的块中提取文本。"""
-        if 'lines' not in block:
+        if "lines" not in block:
             return ""
-        
+
         # 坐标过滤逻辑
-        if self.config.coordinate_filter and not self.config.coordinate_filter(block, btype):
+        if self.config.coordinate_filter and not self.config.coordinate_filter(
+            block, btype
+        ):
             return ""
 
         lines_text = []
-        for line in block.get('lines', []):
-            spans = line.get('spans', [])
+        for line in block.get("lines", []):
+            spans = line.get("spans", [])
             line_parts = []
             for span in spans:
-                stype = span.get('type')
-                content = span.get('content', '')
+                stype = span.get("type")
+                content = span.get("content", "")
                 if not content:
                     continue
 
-                if stype == 'text':
+                if stype == "text":
                     line_parts.append(content)
-                elif stype == 'inline_equation' and self.config.save_formulas:
+                elif stype == "inline_equation" and self.config.save_formulas:
                     line_parts.append(self.config.formula_style.format(content=content))
-            
+
             lines_text.append("".join(line_parts))
-        
+
         return "".join(lines_text)
 
     def get_text_from_block(self, block: Dict[str, Any], btype: str) -> str:
         """迭代式提取文本，支持嵌套 list。"""
-        if 'lines' in block:
+        if "lines" in block:
             return self.get_text_basic(block, btype)
-        
-        if btype != 'list' or 'blocks' not in block:
+
+        if btype != "list" or "blocks" not in block:
             return ""
 
-        stack = [[iter(block['blocks']), []]]
+        stack = [[iter(block["blocks"]), []]]
         while stack:
             it, collected = stack[-1]
             try:
                 curr_item = next(it)
-                if 'lines' in curr_item:
+                if "lines" in curr_item:
                     text = self.get_text_basic(curr_item, btype)
                     if text:
                         collected.append(text)
-                elif 'blocks' in curr_item:
-                    stack.append([iter(curr_item['blocks']), []])
+                elif "blocks" in curr_item:
+                    stack.append([iter(curr_item["blocks"]), []])
             except StopIteration:
                 _, finished_collected = stack.pop()
                 joined = "\n".join(finished_collected)
@@ -114,50 +126,80 @@ class TextExtractor:
                     stack[-1][1].append(joined)
         return ""
 
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class MarkdownConverter:
     """主逻辑：解析 JSON 并生成 Markdown。"""
+
     def __init__(self, config: ExtractorConfig):
         self.config = config
         self.extractor = TextExtractor(config)
-        self.title_parser = TitleParser(config.title_patterns, config.default_title_level)
+        self.title_parser = TitleParser(
+            config.title_patterns, config.default_title_level
+        )
 
-    def _download_image(self, image_url: str, asset_dir: Optional[Path], page_idx: int) -> str:
+    def _download_image(
+        self, image_url: str, asset_dir: Optional[Path], page_idx: int
+    ) -> str:
         """下载图片并返回本地路径。"""
         if requests is None:
             logger.warning("requests library not installed, cannot download image")
             return image_url
-        
+
         if asset_dir is None:
             return image_url
-        
+
+        parsed_url = urlparse(image_url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            logger.warning("Invalid image URL: %s", image_url)
+            return image_url
+
+        allowed_schemes = ("http", "https")
+        if parsed_url.scheme not in allowed_schemes:
+            logger.warning("Unsupported URL scheme: %s", parsed_url.scheme)
+            return image_url
+
         try:
             response = requests.get(image_url, stream=True, timeout=10)
             response.raise_for_status()
-            
-            filename = Path(urlparse(image_url).path).name
-            local_filename = f"{page_idx:04d}@{filename}"
+
+            content_type = response.headers.get("Content-Type", "")
+            allowed_types = ("image/jpeg", "image/png", "image/gif", "image/webp")
+            if content_type and not any(
+                content_type.startswith(t) for t in allowed_types
+            ):
+                logger.warning("Unsupported image type: %s", content_type)
+                return image_url
+
+            filename = Path(parsed_url.path).name
+            if not filename or "/" in filename or "\\" in filename:
+                filename = f"image_{page_idx}"
+
+            safe_filename = "".join(c for c in filename if c.isalnum() or c in "._-")
+            local_filename = f"{page_idx:04d}@{safe_filename}"
             local_path = asset_dir / local_filename
-            
-            with open(local_path, 'wb') as f:
+
+            with open(local_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             return str(local_path)
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             logger.warning("Failed to download image %s: %s", image_url, e)
+            return image_url
+        except OSError as e:
+            logger.warning("Failed to save image %s: %s", image_url, e)
             return image_url
 
     def convert(self, json_path: Path, output_path: Path):
         """执行转换流程。"""
         json_path = Path(json_path)
         output_path = Path(output_path)
-        
+
         if self.config.save_images:
             asset_dir_name = f"{json_path.stem}.assets"
             asset_dir: Optional[Path] = json_path.parent / asset_dir_name
@@ -166,82 +208,107 @@ class MarkdownConverter:
             asset_dir = None
             asset_dir_name = ""
 
-        with open(json_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            logger.error("JSON file not found: %s", json_path)
+            return
+        except json.JSONDecodeError as e:
+            logger.error("Invalid JSON format in %s: %s", json_path, e)
+            return
+        except OSError as e:
+            logger.error("Failed to read file %s: %s", json_path, e)
+            return
 
         md_parts = []
-        for page in data.get('pdf_info', []):
-            page_idx = page.get('page_idx', 0)
+        for page in data.get("pdf_info", []):
+            page_idx = page.get("page_idx", 0)
             md_parts.append(self.config.page_break_marker.format(page_num=page_idx + 1))
-            
+
             # 处理正文块
-            for block in page.get('para_blocks', []):
-                btype = block.get('type')
-                
-                if btype == 'title' and self.config.save_text:
+            for block in page.get("para_blocks", []):
+                btype = block.get("type")
+
+                if btype == "title" and self.config.save_text:
                     text = self.extractor.get_text_from_block(block, btype)
                     if text:
                         level = self.title_parser.get_level(text)
                         md_parts.append(f"{'#' * level} {text}")
-                
-                elif btype in ('text', 'list') and self.config.save_text:
+
+                elif btype in ("text", "list") and self.config.save_text:
                     text = self.extractor.get_text_from_block(block, btype)
                     if text:
                         md_parts.append(text)
-                
-                elif btype == 'image' and self.config.save_images:
+
+                elif btype == "image" and self.config.save_images:
                     img_url, caption = None, ""
-                    for sub in block.get('blocks', []):
-                        if sub.get('type') == 'image_body':
+                    for sub in block.get("blocks", []):
+                        if sub.get("type") == "image_body":
                             try:
-                                img_url = sub['lines'][0]['spans'][0]['image_path']
-                            except (KeyError, IndexError): continue
-                        elif sub.get('type') == 'image_caption':
-                            caption = self.extractor.get_text_from_block(sub, 'title')
-                    
+                                img_url = sub["lines"][0]["spans"][0]["image_path"]
+                            except (KeyError, IndexError) as e:
+                                logger.warning("Failed to extract image path: %s", e)
+                                img_url = None
+                            except Exception as e:
+                                logger.warning(
+                                    "Unexpected error extracting image path: %s", e
+                                )
+                                img_url = None
+                        elif sub.get("type") == "image_caption":
+                            caption = self.extractor.get_text_from_block(sub, "title")
+
                     if img_url:
-                        local_abs_path = self._download_image(img_url, asset_dir, page_idx)
+                        local_abs_path = self._download_image(
+                            img_url, asset_dir, page_idx
+                        )
                         # 使用相对于 markdown 文件的文件夹路径
                         if local_abs_path != img_url:
                             local_filename = Path(local_abs_path).name
                             local_rel_path = f"{asset_dir_name}/{local_filename}"
                         else:
                             local_rel_path = img_url
-                        
+
                         img_md = f"![]({local_rel_path})"
                         if caption:
-                            img_md += self.config.image_caption_style.format(caption=caption)
+                            img_md += self.config.image_caption_style.format(
+                                caption=caption
+                            )
                         md_parts.append(img_md)
 
             # 处理脚注/摒弃块 (如果开启)
-            if self.config.save_footnotes or self.config.save_header or self.config.save_footer:
-                for block in page.get('discarded_blocks', []):
-                    btype = block.get('type')
+            if (
+                self.config.save_footnotes
+                or self.config.save_header
+                or self.config.save_footer
+            ):
+                for block in page.get("discarded_blocks", []):
+                    btype = block.get("type")
                     # 这里可以根据规则进一步精细化，比如判断是否是 page_footnote
-                    if btype == 'page_footnote' and self.config.save_footnotes:
+                    if btype == "page_footnote" and self.config.save_footnotes:
                         text = self.extractor.get_text_from_block(block, btype)
                         if text:
                             md_parts.append(text)
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n\n".join(md_parts))
-        
+
         print(f"Successfully converted {json_path} to {output_path}")
+
 
 if __name__ == "__main__":
     # 示例用法
     def my_filter(block, btype):
-        if 'bbox' not in block: return True
-        x0, y0, x1, y1 = block['bbox']
+        if "bbox" not in block:
+            return True
+        x0, y0, x1, y1 = block["bbox"]
         # 示例：过滤掉宽度太小的块
-        if abs(x1 - x0) < 50: return False
+        if abs(x1 - x0) < 50:
+            return False
         return True
 
-    cfg = ExtractorConfig(
-        save_images=True,
-        coordinate_filter=my_filter
-    )
-    
+    cfg = ExtractorConfig(save_images=True, coordinate_filter=my_filter)
+
     # 假设有这个文件
     # processor = MarkdownConverter(cfg)
     # processor.convert("test.json", "output.md")
